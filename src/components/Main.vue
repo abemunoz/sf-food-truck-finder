@@ -9,12 +9,18 @@
             id="closest"
             value="closest"
             v-model="filters"
+            :disabled="proximityDisabled"
           />
           <label for="open">Closest to me</label>
           <input type="checkbox" id="open" value="open" v-model="filters" />
           <label for="open">Open right now</label>
           <br />
           <button class="search" v-on:click="search">Search</button>
+          <div v-if="error">
+            <mdb-alert color="danger">
+              Search call failed, please try again!
+            </mdb-alert>
+          </div>
         </div>
       </div>
     </div>
@@ -39,7 +45,15 @@
               <td>{{ foodTruck.applicant }}</td>
               <td>{{ foodTruck.optionaltext }}</td>
               <td>{{ foodTruck.starttime }} - {{ foodTruck.endtime }}</td>
-              <td>{{ foodTruck.location }}</td>
+              <td>
+                <a
+                  target="_blank"
+                  :href="
+                    `https://maps.google.com/?q=${foodTruck.latitude},${foodTruck.longitude}`
+                  "
+                  >{{ foodTruck.location }}</a
+                >
+              </td>
             </tr>
           </mdb-tbl-body>
         </mdb-tbl>
@@ -49,20 +63,23 @@
 </template>
 
 <script>
-import { mdbTbl, mdbTblHead, mdbTblBody } from "mdbvue";
+import { mdbTbl, mdbTblHead, mdbTblBody, mdbAlert } from "mdbvue";
 export default {
   name: "Main",
   components: {
     mdbTbl,
     mdbTblHead,
     mdbTblBody,
+    mdbAlert,
   },
   data() {
     return {
       latitude: null,
       longitude: null,
+      proximityDisabled: true,
       filters: [],
       foodTrucks: [],
+      error: false,
     };
   },
   methods: {
@@ -71,6 +88,7 @@ export default {
         navigator.geolocation.getCurrentPosition((position) => {
           this.latitude = position.coords.latitude;
           this.longitude = position.coords.longitude;
+          this.proximityDisabled = false;
         });
       } else {
         console.log("Geolocation is not supported by this browser.");
@@ -124,15 +142,15 @@ export default {
       }
 
       let response;
+      this.error = false;
       await fetch(url)
         .then((resp) => resp.json())
-        .then((data) => (response = data));
+        .then((data) => (response = data))
+        .catch(() => {
+          this.error = true;
+        });
 
-      if (
-        this.filters.includes("closest") &&
-        this.longitude !== null &&
-        this.latitude !== null
-      ) {
+      if (this.filters.includes("closest")) {
         response.forEach((foodTruck) => {
           foodTruck.distance = this.haversineDistance(
             [this.latitude, this.longitude],
@@ -142,16 +160,12 @@ export default {
         response.sort((a, b) => {
           return a.distance - b.distance;
         });
-        this.foodTrucks.forEach((foodTruck) => {
-          console.log(
-            `${foodTruck.applicant}: ${foodTruck.distance} :  ${foodTruck.location}`
-          );
-        });
       }
       this.foodTrucks = response;
+      //TODO: control through lifecycle method
       setTimeout(() => {
-        var elmnt = document.getElementById("foodTrucks");
-        elmnt.scrollIntoView({ behavior: "smooth" });
+        let table = document.getElementById("foodTrucks");
+        table.scrollIntoView({ behavior: "smooth" });
       }, 0);
     },
   },
@@ -187,12 +201,16 @@ export default {
   background-color: #4285f4; /* Green */
   border: none;
   color: white;
-  margin-top: 0.5rem;
+  margin: 0.5rem 0;
   padding: 1rem 2rem;
   border-radius: 0.2rem;
 }
 
 input[type="checkbox"] {
   margin-right: 0.25rem;
+}
+
+a {
+  text-decoration: underline;
 }
 </style>
